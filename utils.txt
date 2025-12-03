@@ -1,0 +1,84 @@
+package main
+
+import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"errors"
+	"io"
+	"time"
+	"os"
+	"diary/config"
+
+
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+	"github.com/google/uuid"
+)
+
+func HashPassword(pw string) (string, error) {
+	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	return string(b), err
+}
+
+func CheckPasswordHash(hash, pw string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw))
+}
+
+// AES-GCM 加密 / 解密
+func EncryptAESGCM(key []byte, plaintext []byte) (ciphertext []byte, nonce []byte, err error) {
+	if len(key) != 32 {
+		return nil, nil, errors.New("invalid key length")
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil { return nil, nil, err }
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil { return nil, nil, err }
+	nonce = make([]byte, aesgcm.NonceSize())
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil { return nil, nil, err }
+	ciphertext = aesgcm.Seal(nil, nonce, plaintext, nil)
+	return ciphertext, nonce, nil
+}
+
+func DecryptAESGCM(key []byte, nonce []byte, ciphertext []byte) (plaintext []byte, err error) {
+	block, err := aes.NewCipher(key)
+	if err != nil { return nil, err }
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil { return nil, err }
+	plain, err := aesgcm.Open(nil, nonce, ciphertext, nil)
+	return plain, err
+}
+
+// JWT 生成与验证
+func CreateJWTToken(userID uint, cfg *config.Config) (string, error) {
+	claims := jwt.MapClaims{
+		"sub": userID,
+		"exp": time.Now().Add(time.Hour * time.Duration(cfg.JWTExpireHours)).Unix(),
+		"iat": time.Now().Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(cfg.JWTSecret))
+}
+
+func ParseJWTToken(tokenStr string, cfg *config.Config) (*jwt.Token, error) {
+	return jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		return []byte(cfg.JWTSecret), nil
+	})
+}
+
+// 生成随机文件名
+func NewFilename(orig string) string {
+	return uuid.New().String() + "_" + orig
+}
+
+
+func EnsureUploadDir(dir string, cfg *config.Config) {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		os.MkdirAll(dir, 0755)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
