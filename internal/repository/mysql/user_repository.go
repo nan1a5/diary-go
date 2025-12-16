@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"diary/internal/domain"
-	"diary/internal"
+	"diary/internal/models"
 	"gorm.io/gorm"
 )
 

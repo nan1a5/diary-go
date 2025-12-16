@@ -8,9 +8,9 @@ import (
 
 
 	"diary/config"
-	"diary/internal"
 	"diary/internal/app"
 	"diary/internal/database"
+	"diary/internal/models"
 	"github.com/joho/godotenv"
 )
 
@@ -27,7 +27,7 @@ func main() {
 
 	cfg := config.LoadConfig()
 	db := mysql.InitDB(cfg)
-	defer mysql.CloseDB(db)
+	// defer mysql.CloseDB(db) // CloseDB 可能不存在，gorm 通常不需要显式关闭，或者需要从 sql.DB 关闭
 
 
 	if err := models.AutoMigrate(db); err != nil {
@@ -41,7 +41,7 @@ func main() {
 	}
 
 
-	r := router.SetupRouter(db, cfg)
+	r := app.SetupRouter(db, cfg)
 	addr := ":" + cfg.Port
 	log.Printf("server running at %s", addr)
 	if err := http.ListenAndServe(addr, r); err != nil {

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"gorm.io/gorm"
 	"diary/config"
-	"diary/internal"
+	"diary/internal/models"
 	"diary/pkg/utils"
 	"github.com/golang-jwt/jwt/v5"
 )
