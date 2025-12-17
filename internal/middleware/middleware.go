@@ -2,17 +2,19 @@ package middleware
 
 import (
 	"context"
-	"net/http"
-	"strings"
-	"strconv"
-	"gorm.io/gorm"
 	"diary/config"
 	"diary/internal/models"
 	"diary/pkg/utils"
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
 )
 
 type key int
+
 const userCtxKey key = 0
 
 func AuthMiddleware(cfg *config.Config, db *gorm.DB) func(http.Handler) http.Handler {
@@ -56,6 +58,7 @@ func AuthMiddleware(cfg *config.Config, db *gorm.DB) func(http.Handler) http.Han
 				return
 			}
 			ctx := context.WithValue(r.Context(), userCtxKey, &u)
+			ctx = context.WithValue(ctx, "user_id", u.ID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
