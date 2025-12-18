@@ -45,6 +45,8 @@ type DiaryRepository interface {
 	SearchByUserID(ctx context.Context, userID uint, keyword string, offset, limit int) ([]Diary, int64, error)
 	// GetByDateRange 获取指定日期范围的日记
 	GetByDateRange(ctx context.Context, userID uint, startDate, endDate time.Time) ([]Diary, error)
+	// GetByIDs 根据ID列表批量获取日记
+	GetByIDs(ctx context.Context, userID uint, ids []uint) ([]Diary, error)
 	// GetByTags 根据标签获取日记
 	GetByTags(ctx context.Context, userID uint, tagIDs []uint, offset, limit int) ([]Diary, int64, error)
 	// AddTags 为日记添加标签
@@ -59,6 +61,16 @@ type DiaryRepository interface {
 	GetWithAll(ctx context.Context, id uint) (*Diary, error)
 	// CountByUserID 统计用户的日记总数
 	CountByUserID(ctx context.Context, userID uint) (int64, error)
+	// GetMoodStats 统计心情分布
+	GetMoodStats(ctx context.Context, userID uint) (map[string]int64, error)
+	// GetMonthlyTrend 获取每月日记数量趋势
+	GetMonthlyTrend(ctx context.Context, userID uint) ([]MonthlyTrendItem, error)
+	// GetTopTags 获取最常用的标签
+	GetTopTags(ctx context.Context, userID uint, limit int) ([]TopTagItem, error)
+	// UpdatePinStatus 更新置顶状态
+	UpdatePinStatus(ctx context.Context, id uint, isPinned bool) error
+	// CountPinned 统计用户置顶日记数量
+	CountPinned(ctx context.Context, userID uint) (int64, error)
 }
 
 // TodoRepository 待办事项仓储接口
@@ -145,4 +157,3 @@ type Repository interface {
 	Tag() TagRepository
 	Image() ImageRepository
 }
-

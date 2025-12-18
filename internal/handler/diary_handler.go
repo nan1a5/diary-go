@@ -41,6 +41,8 @@ func (h *DiaryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.IsPublic,
 		req.Tags,
 		req.ImageIDs,
+		req.Properties,
+		req.Music,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "创建日记失败", err.Error())
@@ -88,12 +90,14 @@ func (h *DiaryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		req.Date,
 		req.IsPublic,
 		req.Tags,
+		req.Properties,
+		req.Music,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "更新日记失败", err.Error())
 		return
 	}
-	
+
 	// 获取更新后的对象以返回
 	updated, err := h.diaryService.GetByID(r.Context(), uint(id))
 	if err != nil {
@@ -213,16 +217,16 @@ func (h *DiaryHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DiaryHandler) Search(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(uint)
 	keyword := r.URL.Query().Get("q")
+	if keyword == "" {
+		respondError(w, http.StatusBadRequest, "搜索关键词不能为空", "")
+		return
+	}
+
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
-	if pageSize < 1 {
-		pageSize = 10
-	}
+
+	userID := r.Context().Value("user_id").(uint)
 
 	diaries, total, err := h.diaryService.Search(r.Context(), userID, keyword, page, pageSize)
 	if err != nil {
@@ -230,17 +234,21 @@ func (h *DiaryHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var diaryResponses []dto.DiaryResponse
-	for _, d := range diaries {
-		diaryResponses = append(diaryResponses, h.toDiaryResponse(&d, false))
+	diaryResponses := make([]dto.DiaryResponse, len(diaries))
+	for i, diary := range diaries {
+		// 搜索列表只返回摘要，不返回详细内容（因为可能需要解密，且列表不需要全文）
+		// 如果需要，可以在这里解密，但 Search 接口通常返回列表
+		diaryResponses[i] = h.toDiaryResponse(&diary, false)
 	}
 
-	respondSuccess(w, http.StatusOK, "搜索成功", dto.DiaryListResponse{
+	response := dto.DiaryListResponse{
 		Diaries:  diaryResponses,
 		Total:    total,
 		Page:     page,
 		PageSize: pageSize,
-	})
+	}
+
+	respondSuccess(w, http.StatusOK, "搜索成功", response)
 }
 
 func (h *DiaryHandler) ListPublic(w http.ResponseWriter, r *http.Request) {
@@ -272,18 +280,44 @@ func (h *DiaryHandler) ListPublic(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *DiaryHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "无效的ID", err.Error())
+		return
+	}
+
+	userID := r.Context().Value("user_id").(uint)
+
+	newStatus, err := h.diaryService.TogglePin(r.Context(), userID, uint(id))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "操作失败", err.Error())
+		return
+	}
+
+	msg := "已置顶"
+	if !newStatus {
+		msg = "已取消置顶"
+	}
+	respondSuccess(w, http.StatusOK, msg, map[string]bool{"is_pinned": newStatus})
+}
+
 func (h *DiaryHandler) toDiaryResponse(diary *domain.Diary, includeContent bool) dto.DiaryResponse {
 	resp := dto.DiaryResponse{
-		ID:        diary.ID,
-		Title:     diary.Title,
-		Summary:   diary.Summary,
-		Weather:   diary.Weather,
-		Mood:      diary.Mood,
-		Location:  diary.Location,
-		Date:      diary.Date,
-		IsPublic:  diary.IsPublic,
-		CreatedAt: diary.CreatedAt,
-		UpdatedAt: diary.UpdatedAt,
+		ID:         diary.ID,
+		Title:      diary.Title,
+		Summary:    diary.Summary,
+		Weather:    diary.Weather,
+		Mood:       diary.Mood,
+		Location:   diary.Location,
+		Date:       diary.Date,
+		IsPublic:   diary.IsPublic,
+		IsPinned:   diary.IsPinned,
+		Properties: diary.Properties,
+		Music:      diary.Music,
+		CreatedAt:  diary.CreatedAt,
+		UpdatedAt:  diary.UpdatedAt,
 	}
 
 	if includeContent {

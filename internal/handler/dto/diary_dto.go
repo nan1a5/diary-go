@@ -3,42 +3,49 @@ package dto
 import "time"
 
 type CreateDiaryRequest struct {
-	Title    string    `json:"title" binding:"required,max=255"`
-	Content  string    `json:"content"`
-	Weather  string    `json:"weather"`
-	Mood     string    `json:"mood"`
-	Location string    `json:"location"`
-	Date     time.Time `json:"date" binding:"required"`
-	IsPublic bool      `json:"is_public"`
-	Tags     []string  `json:"tags"`
-	ImageIDs []uint    `json:"image_ids"`
+	Title      string                 `json:"title" binding:"required,max=255"`
+	Content    string                 `json:"content"`
+	Weather    string                 `json:"weather"`
+	Mood       string                 `json:"mood"`
+	Location   string                 `json:"location"`
+	Date       time.Time              `json:"date" binding:"required"`
+	IsPublic   bool                   `json:"is_public"`
+	Tags       []string               `json:"tags"`
+	ImageIDs   []uint                 `json:"image_ids"`
+	Properties map[string]interface{} `json:"properties"`
+	Music      string                 `json:"music"`
 }
 
 type UpdateDiaryRequest struct {
-	Title    string    `json:"title" binding:"required,max=255"`
-	Content  string    `json:"content"`
-	Weather  string    `json:"weather"`
-	Mood     string    `json:"mood"`
-	Location string    `json:"location"`
-	Date     time.Time `json:"date" binding:"required"`
-	IsPublic bool      `json:"is_public"`
-	Tags     []string  `json:"tags"`
+	Title      string                 `json:"title" binding:"required,max=255"`
+	Content    string                 `json:"content"`
+	Weather    string                 `json:"weather"`
+	Mood       string                 `json:"mood"`
+	Location   string                 `json:"location"`
+	Date       time.Time              `json:"date" binding:"required"`
+	IsPublic   bool                   `json:"is_public"`
+	Tags       []string               `json:"tags"`
+	Properties map[string]interface{} `json:"properties"`
+	Music      string                 `json:"music"`
 }
 
 type DiaryResponse struct {
-	ID        uint            `json:"id"`
-	Title     string          `json:"title"`
-	Content   string          `json:"content,omitempty"` // 仅详情返回
-	Summary   string          `json:"summary"`           // 列表返回
-	Weather   string          `json:"weather"`
-	Mood      string          `json:"mood"`
-	Location  string          `json:"location"`
-	Date      time.Time       `json:"date"`
-	IsPublic  bool            `json:"is_public"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
-	Tags      []TagResponse   `json:"tags,omitempty"`
-	Images    []ImageResponse `json:"images,omitempty"`
+	ID         uint                   `json:"id"`
+	Title      string                 `json:"title"`
+	Content    string                 `json:"content,omitempty"` // 仅详情返回
+	Summary    string                 `json:"summary"`           // 列表返回
+	Weather    string                 `json:"weather"`
+	Mood       string                 `json:"mood"`
+	Location   string                 `json:"location"`
+	Date       time.Time              `json:"date"`
+	IsPublic   bool                   `json:"is_public"`
+	IsPinned   bool                   `json:"is_pinned"`
+	Properties map[string]interface{} `json:"properties,omitempty"`
+	Music      string                 `json:"music,omitempty"`
+	CreatedAt  time.Time              `json:"created_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	Tags       []TagResponse          `json:"tags,omitempty"`
+	Images     []ImageResponse        `json:"images,omitempty"`
 }
 
 type DiaryListResponse struct {

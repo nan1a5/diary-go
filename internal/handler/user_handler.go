@@ -8,6 +8,7 @@ import (
 	"diary/internal/domain"
 	"diary/internal/handler/dto"
 	"diary/internal/service"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -36,6 +37,8 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusConflict, "用户已存在", err.Error())
 		case service.ErrInvalidUsername:
 			respondError(w, http.StatusBadRequest, "用户名格式不正确", err.Error())
+		case service.ErrUnableResgister:
+			respondError(w, http.StatusBadRequest, "暂未开放注册", err.Error())
 		default:
 			respondError(w, http.StatusInternalServerError, "注册失败", err.Error())
 		}
@@ -247,6 +250,3 @@ func (h *UserHandler) getUserIDFromContext(r *http.Request) uint {
 	}
 	return 0
 }
-
-
-

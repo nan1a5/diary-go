@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const baseURL = "http://localhost:8310"
+const baseURL = "http://localhost:8080"
 
 var authToken string
 var createdDiaryID uint
@@ -36,14 +36,20 @@ func main() {
 	// 6. 获取日记列表
 	listDiaries()
 
-	// 7. 获取日记详情
+	// 7. 搜索日记
+	searchDiary("今天")
+
+	// 8. 获取统计看板
+	getDashboardStats()
+
+	// 9. 获取日记详情
 	if createdDiaryID != 0 {
 		getDiary(createdDiaryID)
 
-		// 8. 更新日记
+		// 10. 更新日记
 		updateDiary(createdDiaryID, "今天天气真棒", "心情非常好，代码测试通过！")
 
-		// 9. 删除日记
+		// 11. 删除日记
 		deleteDiary(createdDiaryID)
 	}
 
@@ -132,17 +138,27 @@ func createDiary(title, content, tagName string) {
 }
 
 func listDiaries() {
-	fmt.Println("[6/9] 测试获取日记列表...")
+	fmt.Println("[6/11] 测试获取日记列表...")
 	request("GET", "/api/diaries?page=1&page_size=10", &authToken, nil)
 }
 
+func searchDiary(keyword string) {
+	fmt.Printf("[7/11] 测试搜索日记 (Keyword: %s)...\n", keyword)
+	request("GET", "/api/diaries/search?q="+keyword+"&page=1&page_size=10", &authToken, nil)
+}
+
+func getDashboardStats() {
+	fmt.Println("[8/11] 测试获取统计看板...")
+	request("GET", "/api/stats/dashboard", &authToken, nil)
+}
+
 func getDiary(id uint) {
-	fmt.Printf("[7/9] 测试获取日记详情 (ID: %d)...\n", id)
+	fmt.Printf("[9/11] 测试获取日记详情 (ID: %d)...\n", id)
 	request("GET", fmt.Sprintf("/api/diaries/%d", id), &authToken, nil)
 }
 
 func updateDiary(id uint, title, content string) {
-	fmt.Printf("[8/9] 测试更新日记 (ID: %d)...\n", id)
+	fmt.Printf("[10/11] 测试更新日记 (ID: %d)...\n", id)
 	body := map[string]interface{}{
 		"title":   title,
 		"content": content,
@@ -152,7 +168,7 @@ func updateDiary(id uint, title, content string) {
 }
 
 func deleteDiary(id uint) {
-	fmt.Printf("[9/9] 测试删除日记 (ID: %d)...\n", id)
+	fmt.Printf("[11/11] 测试删除日记 (ID: %d)...\n", id)
 	request("DELETE", fmt.Sprintf("/api/diaries/%d", id), &authToken, nil)
 }
 

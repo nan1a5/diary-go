@@ -15,14 +15,16 @@ var (
 )
 
 type DiaryService interface {
-	Create(ctx context.Context, userID uint, title, content, weather, mood, location string, date time.Time, isPublic bool, tagNames []string, imageIDs []uint) (*domain.Diary, error)
+	Create(ctx context.Context, userID uint, title, content, weather, mood, location string, date time.Time, isPublic bool, tagNames []string, imageIDs []uint, properties map[string]interface{}, music string) (*domain.Diary, error)
 	GetByID(ctx context.Context, id uint) (*domain.Diary, error)
-	Update(ctx context.Context, id uint, title, content, weather, mood, location string, date time.Time, isPublic bool, tagNames []string) error
+	Update(ctx context.Context, id uint, title, content, weather, mood, location string, date time.Time, isPublic bool, tagNames []string, properties map[string]interface{}, music string) error
 	Delete(ctx context.Context, id uint) error
 	ListByUserID(ctx context.Context, userID uint, page, pageSize int) ([]domain.Diary, int64, error)
 	ListPublic(ctx context.Context, page, pageSize int) ([]domain.Diary, int64, error)
 	Search(ctx context.Context, userID uint, keyword string, page, pageSize int) ([]domain.Diary, int64, error)
 	GetByDateRange(ctx context.Context, userID uint, startDate, endDate time.Time) ([]domain.Diary, error)
+	GetByIDs(ctx context.Context, userID uint, ids []uint) ([]domain.Diary, error)
+	TogglePin(ctx context.Context, userID, diaryID uint) (bool, error)
 }
 
 type diaryService struct {
@@ -41,7 +43,7 @@ func NewDiaryService(diaryRepo domain.DiaryRepository, tagRepo domain.TagReposit
 	}
 }
 
-func (s *diaryService) Create(ctx context.Context, userID uint, title, content, weather, mood, location string, date time.Time, isPublic bool, tagNames []string, imageIDs []uint) (*domain.Diary, error) {
+func (s *diaryService) Create(ctx context.Context, userID uint, title, content, weather, mood, location string, date time.Time, isPublic bool, tagNames []string, imageIDs []uint, properties map[string]interface{}, music string) (*domain.Diary, error) {
 	// 处理标签
 	var tags []domain.Tag
 	for _, name := range tagNames {
@@ -54,15 +56,17 @@ func (s *diaryService) Create(ctx context.Context, userID uint, title, content, 
 
 	// 创建日记对象
 	diary := &domain.Diary{
-		UserID:    userID,
-		Title:     title,
-		Weather:   weather,
-		Mood:      mood,
-		Location:  location,
-		Date:      date,
-		IsPublic:  isPublic,
-		Tags:      tags,
-		Summary:   makeSummary(content),
+		UserID:     userID,
+		Title:      title,
+		Weather:    weather,
+		Mood:       mood,
+		Location:   location,
+		Date:       date,
+		IsPublic:   isPublic,
+		Tags:       tags,
+		Summary:    makeSummary(content),
+		Properties: properties,
+		Music:      music,
 	}
 
 	// 加密内容
@@ -123,7 +127,7 @@ func (s *diaryService) GetByID(ctx context.Context, id uint) (*domain.Diary, err
 	return diary, nil
 }
 
-func (s *diaryService) Update(ctx context.Context, id uint, title, content, weather, mood, location string, date time.Time, isPublic bool, tagNames []string) error {
+func (s *diaryService) Update(ctx context.Context, id uint, title, content, weather, mood, location string, date time.Time, isPublic bool, tagNames []string, properties map[string]interface{}, music string) error {
 	diary, err := s.diaryRepo.GetByID(ctx, id)
 	if err != nil {
 		return ErrDiaryNotFound
@@ -136,6 +140,8 @@ func (s *diaryService) Update(ctx context.Context, id uint, title, content, weat
 	diary.Date = date
 	diary.IsPublic = isPublic
 	diary.Summary = makeSummary(content)
+	diary.Properties = properties
+	diary.Music = music
 
 	// 更新内容
 	if content != "" && len(s.cfg.AESKey) == 32 {
@@ -165,13 +171,13 @@ func (s *diaryService) Update(ctx context.Context, id uint, title, content, weat
 			newTagIDs = append(newTagIDs, tag.ID)
 		}
 	}
-	
+
 	// GORM 的 Replace 关联
 	// 由于 Repository 没有直接暴露 ReplaceTags，我们可能需要扩展 Repo 或者手动 Remove + Add
 	// 假设我们扩展了 Repository，或者直接使用 Update 时的关联替换？
 	// GORM 的 Updates 通常不更新关联。
 	// 我们可以使用 diaryRepo.AddTags 和 RemoveTags，但这需要知道哪些要删。
-	
+
 	// 简单策略：获取当前标签 -> 对比 -> 删旧加新
 	// 这是一个常用的业务逻辑。
 	currentTags, _ := s.tagRepo.GetByDiaryID(ctx, id)
@@ -179,7 +185,7 @@ func (s *diaryService) Update(ctx context.Context, id uint, title, content, weat
 	for _, t := range currentTags {
 		currentTagMap[t.ID] = true
 	}
-	
+
 	newTagMap := make(map[uint]bool)
 	var toAdd []uint
 	for _, tid := range newTagIDs {
@@ -188,14 +194,14 @@ func (s *diaryService) Update(ctx context.Context, id uint, title, content, weat
 			toAdd = append(toAdd, tid)
 		}
 	}
-	
+
 	var toRemove []uint
 	for _, t := range currentTags {
 		if !newTagMap[t.ID] {
 			toRemove = append(toRemove, t.ID)
 		}
 	}
-	
+
 	if len(toAdd) > 0 {
 		s.diaryRepo.AddTags(ctx, id, toAdd)
 	}
@@ -218,12 +224,12 @@ func (s *diaryService) ListByUserID(ctx context.Context, userID uint, page, page
 		pageSize = 20
 	}
 	offset := (page - 1) * pageSize
-	
+
 	diaries, total, err := s.diaryRepo.ListByUserID(ctx, userID, offset, pageSize)
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// 列表通常不需要解密全文，只返回 Summary
 	// 如果需要解密，可以在这里循环解密，但性能较差
 	return diaries, total, nil
@@ -252,7 +258,64 @@ func (s *diaryService) Search(ctx context.Context, userID uint, keyword string, 
 }
 
 func (s *diaryService) GetByDateRange(ctx context.Context, userID uint, startDate, endDate time.Time) ([]domain.Diary, error) {
-	return s.diaryRepo.GetByDateRange(ctx, userID, startDate, endDate)
+	diaries, err := s.diaryRepo.GetByDateRange(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decrypt content for export
+	for i := range diaries {
+		if len(diaries[i].ContentEnc) > 0 && len(diaries[i].IV) > 0 && len(s.cfg.AESKey) == 32 {
+			plaintext, err := utils.Decrypt(s.cfg.AESKey, diaries[i].ContentEnc, diaries[i].IV)
+			if err == nil {
+				diaries[i].PlainContent = string(plaintext)
+			}
+		}
+	}
+	return diaries, nil
+}
+
+func (s *diaryService) GetByIDs(ctx context.Context, userID uint, ids []uint) ([]domain.Diary, error) {
+	diaries, err := s.diaryRepo.GetByIDs(ctx, userID, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decrypt content for export
+	for i := range diaries {
+		if len(diaries[i].ContentEnc) > 0 && len(diaries[i].IV) > 0 && len(s.cfg.AESKey) == 32 {
+			plaintext, err := utils.Decrypt(s.cfg.AESKey, diaries[i].ContentEnc, diaries[i].IV)
+			if err == nil {
+				diaries[i].PlainContent = string(plaintext)
+			}
+		}
+	}
+	return diaries, nil
+}
+
+func (s *diaryService) TogglePin(ctx context.Context, userID, diaryID uint) (bool, error) {
+	diary, err := s.diaryRepo.GetByID(ctx, diaryID)
+	if err != nil {
+		return false, err
+	}
+	if diary.UserID != userID {
+		return false, errors.New("无权操作此日记")
+	}
+
+	newStatus := !diary.IsPinned
+	if newStatus {
+		// Checking limit
+		count, err := s.diaryRepo.CountPinned(ctx, userID)
+		if err != nil {
+			return false, err
+		}
+		if count >= 3 {
+			return false, errors.New("最多只能置顶3篇日记")
+		}
+	}
+
+	err = s.diaryRepo.UpdatePinStatus(ctx, diaryID, newStatus)
+	return newStatus, err
 }
 
 func makeSummary(content string) string {

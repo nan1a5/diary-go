@@ -8,6 +8,7 @@ import (
 	"diary/config"
 	"diary/internal/domain"
 	"diary/pkg/utils"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,6 +17,7 @@ var (
 	ErrUserAlreadyExists = errors.New("用户已存在")
 	ErrInvalidPassword   = errors.New("密码错误")
 	ErrInvalidUsername   = errors.New("用户名格式不正确")
+	ErrUnableResgister   = errors.New("不允许注册")
 )
 
 type UserService interface {
@@ -51,41 +53,44 @@ func NewUserService(userRepo domain.UserRepository, cfg *config.Config) UserServ
 
 // Register 用户注册
 func (s *userService) Register(ctx context.Context, username, password string) (*domain.User, error) {
+	if !s.cfg.EnableRegistration {
+		return nil, ErrUnableResgister
+	}
 	// 验证用户名格式
 	if len(username) < 3 || len(username) > 50 {
 		return nil, ErrInvalidUsername
 	}
-	
+
 	// 验证密码长度
 	if len(password) < 6 {
 		return nil, errors.New("密码至少需要6位")
 	}
-	
+
 	// 检查用户名是否已存在
 	existingUser, err := s.userRepo.GetByUsername(ctx, username)
 	if err == nil && existingUser != nil {
 		return nil, ErrUserAlreadyExists
 	}
-	
+
 	// 加密密码
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 创建用户（注意：这里需要在repository中支持保存密码）
 	user := &domain.User{
 		Username:  username,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	// 这里需要通过models创建，因为domain.User不包含Password
 	// 我们需要在repository层处理这个
 	if err := s.createUserWithPassword(ctx, user, string(hashedPassword)); err != nil {
 		return nil, err
 	}
-	
+
 	return user, nil
 }
 
@@ -96,18 +101,18 @@ func (s *userService) Login(ctx context.Context, username, password string) (*do
 	if err != nil {
 		return nil, "", ErrUserNotFound
 	}
-	
+
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)); err != nil {
 		return nil, "", ErrInvalidPassword
 	}
-	
+
 	// 生成JWT Token
 	token, err := s.generateToken(user.ID)
 	if err != nil {
 		return nil, "", err
 	}
-	
+
 	return user, token, nil
 }
 
@@ -135,19 +140,19 @@ func (s *userService) UpdateUsername(ctx context.Context, id uint, newUsername s
 	if len(newUsername) < 3 || len(newUsername) > 50 {
 		return ErrInvalidUsername
 	}
-	
+
 	// 检查新用户名是否已被占用
 	existingUser, err := s.userRepo.GetByUsername(ctx, newUsername)
 	if err == nil && existingUser != nil && existingUser.ID != id {
 		return ErrUserAlreadyExists
 	}
-	
+
 	// 更新用户名
 	user := &domain.User{
 		ID:       id,
 		Username: newUsername,
 	}
-	
+
 	return s.userRepo.Update(ctx, user)
 }
 
@@ -157,29 +162,29 @@ func (s *userService) UpdatePassword(ctx context.Context, id uint, oldPassword, 
 	if len(newPassword) < 6 {
 		return errors.New("密码至少需要6位")
 	}
-	
+
 	// 获取用户并验证旧密码
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return ErrUserNotFound
 	}
-	
+
 	// 验证旧密码（需要获取加密后的密码）
 	_, hashedPassword, err := s.getUserWithPassword(ctx, user.Username)
 	if err != nil {
 		return err
 	}
-	
+
 	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(oldPassword)); err != nil {
 		return ErrInvalidPassword
 	}
-	
+
 	// 加密新密码并更新
 	newHashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	
+
 	return s.updateUserPassword(ctx, id, string(newHashedPassword))
 }
 
@@ -196,7 +201,7 @@ func (s *userService) List(ctx context.Context, page, pageSize int) ([]domain.Us
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	
+
 	offset := (page - 1) * pageSize
 	return s.userRepo.List(ctx, offset, pageSize)
 }
@@ -220,4 +225,3 @@ func (s *userService) updateUserPassword(ctx context.Context, id uint, hashedPas
 func (s *userService) generateToken(userID uint) (string, error) {
 	return utils.CreateJWTToken(userID, s.cfg)
 }
-

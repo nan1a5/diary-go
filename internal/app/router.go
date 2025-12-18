@@ -9,6 +9,7 @@ import (
 	"diary/internal/middleware"
 	"diary/internal/repository/mysql"
 	"diary/internal/service"
+
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"gorm.io/gorm"
@@ -23,6 +24,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config) http.Handler {
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(60 * time.Second))
+	r.Use(middleware.CORSMiddleware)
 
 	// Repositories
 	userRepo := mysql.NewUserRepository(db)
@@ -44,9 +46,13 @@ func SetupRouter(db *gorm.DB, cfg *config.Config) http.Handler {
 	todoHandler := handler.NewTodoHandler(todoService)
 	imageHandler := handler.NewImageHandler(imageService)
 	diaryHandler := handler.NewDiaryHandler(diaryService)
+	statsHandler := handler.NewStatsHandler(diaryRepo, todoRepo)
+	exportHandler := handler.NewExportHandler(diaryService)
 
 	// public
-	r.Post("/api/register", userHandler.Register)
+	if cfg.EnableRegistration {
+		r.Post("/api/register", userHandler.Register)
+	}
 	r.Post("/api/login", userHandler.Login)
 	r.Get("/api/diaries/public", diaryHandler.ListPublic)
 
@@ -65,6 +71,13 @@ func SetupRouter(db *gorm.DB, cfg *config.Config) http.Handler {
 			r.Put("/password", userHandler.UpdatePassword)
 			r.Delete("/", userHandler.DeleteUser)
 		})
+
+		// Stats
+		r.Get("/stats/dashboard", statsHandler.GetDashboardStats)
+
+		// Export
+		r.Get("/diaries/{id}/export", exportHandler.ExportSingle)
+		r.Post("/diaries/export", exportHandler.ExportBatch)
 
 		// Tags
 		r.Route("/tags", func(r chi.Router) {
@@ -107,6 +120,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config) http.Handler {
 				r.Get("/", diaryHandler.GetByID)
 				r.Put("/", diaryHandler.Update)
 				r.Delete("/", diaryHandler.Delete)
+				r.Post("/pin", diaryHandler.TogglePin)
 			})
 		})
 	})

@@ -14,8 +14,9 @@ type Config struct {
 	JWTSecret      string
 	AESKey         []byte
 	DBDsn          string
-	UploadDir      string
-	JWTExpireHours int
+	UploadDir          string
+	JWTExpireHours     int
+	EnableRegistration bool
 }
 
 func LoadConfig() *Config {
@@ -26,6 +27,7 @@ func LoadConfig() *Config {
 	dbDsn := getEnv("DB_DSN", "./data.db")
 	uploadDir := getEnv("UPLOAD_DIR", "./uploads")
 	jwtExpireHours := toInt(getEnv("JWT_EXPIRE_HOURS", "72"))
+	enableRegistration := getEnv("ENABLE_REGISTRATION", "true") == "true"
 
 	var aesKey []byte
 	if aesBase64 != "" {
@@ -43,12 +45,13 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		Port:           port,
-		JWTSecret:      jwtSecret,
-		AESKey:         aesKey,
-		DBDsn:          dbDsn,
-		UploadDir:      uploadDir,
-		JWTExpireHours: jwtExpireHours,
+		Port:               port,
+		JWTSecret:          jwtSecret,
+		AESKey:             aesKey,
+		DBDsn:              dbDsn,
+		UploadDir:          uploadDir,
+		JWTExpireHours:     jwtExpireHours,
+		EnableRegistration: enableRegistration,
 	}
 }
 
