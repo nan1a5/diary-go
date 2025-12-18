@@ -89,7 +89,6 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // GetProfile 获取当前用户信息
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	// 从上下文中获取用户ID（由中间件设置）
 	userID := h.getUserIDFromContext(r)
 	if userID == 0 {
 		respondError(w, http.StatusUnauthorized, "未授权", "")

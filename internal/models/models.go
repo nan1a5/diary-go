@@ -29,7 +29,7 @@ type Diary struct {
 	IsDeleted  bool                   `gorm:"default:false" json:"is_deleted"`
 	DeleteTime time.Time              `json:"delete_time,omitempty"`
 	Mood       string                 `gorm:"size:255" json:"mood"`
-	Music      string                 `gorm:"size:255" json:"music"`
+	Music      string                 `gorm:"type:text" json:"music"`
 	IsPinned   bool                   `gorm:"default:false" json:"is_pinned"`
 	ContentEnc []byte                 `gorm:"type:blob" json:"-"`
 	IV         []byte                 `gorm:"type:blob" json:"-"`

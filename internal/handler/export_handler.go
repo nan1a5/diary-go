@@ -84,8 +84,6 @@ func (h *ExportHandler) ExportBatch(w http.ResponseWriter, r *http.Request) {
 		}
 		diaries, err = h.diaryService.GetByIDs(r.Context(), userID, req.IDs)
 	case "date_range", "all":
-		// 如果是 all，可以默认导出所有，或者给一个很大的时间范围
-		// 这里简单处理，如果没有提供日期，默认导出最近100年的
 		var start, end time.Time
 		if req.StartDate != "" {
 			start, _ = time.Parse("2006-01-02", req.StartDate)

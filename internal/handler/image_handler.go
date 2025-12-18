@@ -52,10 +52,7 @@ func (h *ImageHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// 如果提供了 diary_id，尝试关联
 	if diaryID != nil {
-		// 这里最好异步处理或者忽略错误，以免影响上传主流程，或者返回警告
-		// 简单起见，我们尝试关联，如果失败记录日志或忽略
 		_ = h.imageService.AttachToDiary(r.Context(), image.ID, *diaryID)
-		// 更新返回对象的 DiaryID
 		image.DiaryID = diaryID
 	}
 
@@ -180,10 +177,6 @@ func (h *ImageHandler) AttachToDiary(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusForbidden, "无权操作此图片", "")
 		return
 	}
-
-	// TODO: 这里应该也检查日记的所有权，但 imageService.AttachToDiary 可能会处理，或者在这里调用 diaryService 检查
-	// 为了解耦，我们假设 Service 层或数据库约束会处理，或者我们相信用户只能操作自己的数据
-	// 如果需要严格检查，可以在 Service 层增加逻辑，或者在这里引入 DiaryService
 
 	if err := h.imageService.AttachToDiary(r.Context(), uint(id), req.DiaryID); err != nil {
 		respondError(w, http.StatusInternalServerError, "关联日记失败", err.Error())

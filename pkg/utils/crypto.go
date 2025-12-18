@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"io"
 )
@@ -66,4 +67,40 @@ func Decrypt(key []byte, ciphertext []byte, nonce []byte) ([]byte, error) {
 	}
 
 	return plaintext, nil
+}
+
+// EncryptToString 加密字符串并返回 Base64 编码的 (Nonce + Ciphertext)
+func EncryptToString(key []byte, plaintext string) (string, error) {
+	if plaintext == "" {
+		return "", nil
+	}
+	encrypted, nonce, err := Encrypt(key, []byte(plaintext))
+	if err != nil {
+		return "", err
+	}
+	// Combine nonce + encrypted
+	combined := append(nonce, encrypted...)
+	return base64.StdEncoding.EncodeToString(combined), nil
+}
+
+// DecryptFromString 解密 Base64 编码的 (Nonce + Ciphertext)
+func DecryptFromString(key []byte, cryptoText string) (string, error) {
+	if cryptoText == "" {
+		return "", nil
+	}
+	data, err := base64.StdEncoding.DecodeString(cryptoText)
+	if err != nil {
+		return "", err
+	}
+	// GCM nonce size is usually 12 bytes
+	if len(data) < 12 {
+		return "", errors.New("invalid ciphertext length")
+	}
+	nonce := data[:12]
+	ciphertext := data[12:]
+	plaintext, err := Decrypt(key, ciphertext, nonce)
+	if err != nil {
+		return "", err
+	}
+	return string(plaintext), nil
 }

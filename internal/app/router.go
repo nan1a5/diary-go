@@ -50,9 +50,9 @@ func SetupRouter(db *gorm.DB, cfg *config.Config) http.Handler {
 	exportHandler := handler.NewExportHandler(diaryService)
 
 	// public
-	if cfg.EnableRegistration {
-		r.Post("/api/register", userHandler.Register)
-	}
+	// if cfg.EnableRegistration {
+	r.Post("/api/register", userHandler.Register)
+	// }
 	r.Post("/api/login", userHandler.Login)
 	r.Get("/api/diaries/public", diaryHandler.ListPublic)
 

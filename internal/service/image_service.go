@@ -11,6 +11,7 @@ import (
 
 	"diary/config"
 	"diary/internal/domain"
+
 	"github.com/google/uuid"
 )
 
@@ -54,11 +55,11 @@ func (s *imageService) Upload(ctx context.Context, userID uint, file io.Reader, 
 	// 按日期分目录，避免单目录文件过多
 	dateDir := time.Now().Format("2006/01/02")
 	saveDir := filepath.Join(s.cfg.UploadDir, dateDir)
-	
+
 	if err := os.MkdirAll(saveDir, 0755); err != nil {
 		return nil, ErrImageUpload
 	}
-	
+
 	savePath := filepath.Join(saveDir, newFilename)
 	// 相对路径用于存储和访问
 	relPath := filepath.Join(dateDir, newFilename)
@@ -108,10 +109,6 @@ func (s *imageService) Delete(ctx context.Context, id uint) error {
 	if err := s.imageRepo.Delete(ctx, id); err != nil {
 		return err
 	}
-
-	// 这里可以决定是否物理删除文件。既然是软删除，通常保留文件。
-	// 或者移动到回收站目录。
-	// 这里仅做数据库软删除。
 
 	return nil
 }

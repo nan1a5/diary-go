@@ -153,18 +153,11 @@ func (h *DiaryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 如果是私有日记，只能作者查看
-	// 如果是公开日记，任何人可以查看？还是说这只是个人日记应用？
-	// 假设：公开日记可以被其他人查看（如果业务支持社交功能），但目前似乎只有单用户视角。
-	// 不过 GetByID 通常用于编辑或查看详情，如果是自己的日记当然可以。
-	// 如果是别人的公开日记，可能需要不同的逻辑。
-	// 这里简单处理：只能看自己的，或者公开的。
+	// 只能看自己的，或者公开的
 	if diary.UserID != userID && !diary.IsPublic {
 		respondError(w, http.StatusForbidden, "无权查看此日记", "")
 		return
 	}
-
-	// 如果不是自己的日记，可能不想展示某些敏感信息？这里暂时一视同仁。
 
 	respondSuccess(w, http.StatusOK, "获取成功", h.toDiaryResponse(diary, true))
 }
@@ -189,10 +182,6 @@ func (h *DiaryHandler) List(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if startDateStr != "" && endDateStr != "" {
-		// 按日期范围查询，这里假设 Service 层支持或我们在 Controller 组装
-		// 实际上 Service 层有 GetByDateRange，但不带分页（通常用于日历视图）
-		// 如果需要分页列表，可能需要扩展 Service。
-		// 这里简单调用 ListByUserID
 		diaries, total, err = h.diaryService.ListByUserID(r.Context(), userID, page, pageSize)
 	} else {
 		diaries, total, err = h.diaryService.ListByUserID(r.Context(), userID, page, pageSize)
@@ -205,7 +194,7 @@ func (h *DiaryHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	var diaryResponses []dto.DiaryResponse
 	for _, d := range diaries {
-		diaryResponses = append(diaryResponses, h.toDiaryResponse(&d, false))
+		diaryResponses = append(diaryResponses, h.toDiaryResponse(&d, true))
 	}
 
 	respondSuccess(w, http.StatusOK, "获取成功", dto.DiaryListResponse{
@@ -236,8 +225,6 @@ func (h *DiaryHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	diaryResponses := make([]dto.DiaryResponse, len(diaries))
 	for i, diary := range diaries {
-		// 搜索列表只返回摘要，不返回详细内容（因为可能需要解密，且列表不需要全文）
-		// 如果需要，可以在这里解密，但 Search 接口通常返回列表
 		diaryResponses[i] = h.toDiaryResponse(&diary, false)
 	}
 

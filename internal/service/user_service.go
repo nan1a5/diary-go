@@ -85,8 +85,6 @@ func (s *userService) Register(ctx context.Context, username, password string) (
 		UpdatedAt: time.Now(),
 	}
 
-	// 这里需要通过models创建，因为domain.User不包含Password
-	// 我们需要在repository层处理这个
 	if err := s.createUserWithPassword(ctx, user, string(hashedPassword)); err != nil {
 		return nil, err
 	}

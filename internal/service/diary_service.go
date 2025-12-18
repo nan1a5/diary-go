@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"diary/config"
@@ -34,6 +35,47 @@ type diaryService struct {
 	cfg       *config.Config
 }
 
+func (s *diaryService) tryEncrypt(text string) (string, error) {
+	if text == "" || len(s.cfg.AESKey) != 32 {
+		return text, nil
+	}
+	return utils.EncryptToString(s.cfg.AESKey, text)
+}
+
+func (s *diaryService) tryDecrypt(text string) string {
+	if text == "" || len(s.cfg.AESKey) != 32 {
+		return text
+	}
+	// 去除可能的空白字符
+	text = strings.TrimSpace(text)
+	decrypted, err := utils.DecryptFromString(s.cfg.AESKey, text)
+	if err != nil {
+		// 解密失败，可能是旧数据（明文），直接返回原文本
+		return text
+	}
+	return decrypted
+}
+
+func (s *diaryService) decryptDiaries(diaries []domain.Diary) {
+	for i := range diaries {
+		diaries[i].Title = s.tryDecrypt(diaries[i].Title)
+		diaries[i].Weather = s.tryDecrypt(diaries[i].Weather)
+		diaries[i].Mood = s.tryDecrypt(diaries[i].Mood)
+		diaries[i].Location = s.tryDecrypt(diaries[i].Location)
+		diaries[i].Music = s.tryDecrypt(diaries[i].Music)
+
+		// 解密内容并生成动态摘要
+		if len(diaries[i].ContentEnc) > 0 && len(diaries[i].IV) > 0 && len(s.cfg.AESKey) == 32 {
+			plaintext, err := utils.Decrypt(s.cfg.AESKey, diaries[i].ContentEnc, diaries[i].IV)
+			if err == nil {
+				content := string(plaintext)
+				diaries[i].PlainContent = content
+				diaries[i].Summary = makeSummary(content)
+			}
+		}
+	}
+}
+
 func NewDiaryService(diaryRepo domain.DiaryRepository, tagRepo domain.TagRepository, imageRepo domain.ImageRepository, cfg *config.Config) DiaryService {
 	return &diaryService{
 		diaryRepo: diaryRepo,
@@ -54,19 +96,26 @@ func (s *diaryService) Create(ctx context.Context, userID uint, title, content, 
 		tags = append(tags, *tag)
 	}
 
+	// 加密敏感字段
+	encTitle, _ := s.tryEncrypt(title)
+	encWeather, _ := s.tryEncrypt(weather)
+	encMood, _ := s.tryEncrypt(mood)
+	encLocation, _ := s.tryEncrypt(location)
+	encMusic, _ := s.tryEncrypt(music)
+
 	// 创建日记对象
 	diary := &domain.Diary{
 		UserID:     userID,
-		Title:      title,
-		Weather:    weather,
-		Mood:       mood,
-		Location:   location,
+		Title:      encTitle,
+		Weather:    encWeather,
+		Mood:       encMood,
+		Location:   encLocation,
 		Date:       date,
 		IsPublic:   isPublic,
 		Tags:       tags,
-		Summary:    makeSummary(content),
+		Summary:    "", // 暂时不写入摘要，保护隐私
 		Properties: properties,
-		Music:      music,
+		Music:      encMusic,
 	}
 
 	// 加密内容
@@ -124,6 +173,15 @@ func (s *diaryService) GetByID(ctx context.Context, id uint) (*domain.Diary, err
 		}
 	}
 
+	// 解密其他字段
+	diary.Title = s.tryDecrypt(diary.Title)
+	diary.Weather = s.tryDecrypt(diary.Weather)
+	diary.Mood = s.tryDecrypt(diary.Mood)
+	diary.Location = s.tryDecrypt(diary.Location)
+	diary.Music = s.tryDecrypt(diary.Music)
+
+	diary.Summary = makeSummary(diary.PlainContent)
+
 	return diary, nil
 }
 
@@ -133,15 +191,21 @@ func (s *diaryService) Update(ctx context.Context, id uint, title, content, weat
 		return ErrDiaryNotFound
 	}
 
-	diary.Title = title
-	diary.Weather = weather
-	diary.Mood = mood
-	diary.Location = location
+	encTitle, _ := s.tryEncrypt(title)
+	encWeather, _ := s.tryEncrypt(weather)
+	encMood, _ := s.tryEncrypt(mood)
+	encLocation, _ := s.tryEncrypt(location)
+	encMusic, _ := s.tryEncrypt(music)
+
+	diary.Title = encTitle
+	diary.Weather = encWeather
+	diary.Mood = encMood
+	diary.Location = encLocation
 	diary.Date = date
 	diary.IsPublic = isPublic
-	diary.Summary = makeSummary(content)
+	diary.Summary = "" // 暂时不写入摘要，保护隐私
 	diary.Properties = properties
-	diary.Music = music
+	diary.Music = encMusic
 
 	// 更新内容
 	if content != "" && len(s.cfg.AESKey) == 32 {
@@ -158,12 +222,6 @@ func (s *diaryService) Update(ctx context.Context, id uint, title, content, weat
 		return err
 	}
 
-	// 更新标签
-	// 1. 获取现有标签
-	// 2. 计算差异
-	// 或者简单粗暴：先清空再添加（如果 Repo 支持 Replace）
-	// 这里我们手动处理：
-	// 获取新标签的 ID 列表
 	var newTagIDs []uint
 	for _, name := range tagNames {
 		tag, err := s.tagRepo.GetOrCreate(ctx, name)
@@ -172,14 +230,6 @@ func (s *diaryService) Update(ctx context.Context, id uint, title, content, weat
 		}
 	}
 
-	// GORM 的 Replace 关联
-	// 由于 Repository 没有直接暴露 ReplaceTags，我们可能需要扩展 Repo 或者手动 Remove + Add
-	// 假设我们扩展了 Repository，或者直接使用 Update 时的关联替换？
-	// GORM 的 Updates 通常不更新关联。
-	// 我们可以使用 diaryRepo.AddTags 和 RemoveTags，但这需要知道哪些要删。
-
-	// 简单策略：获取当前标签 -> 对比 -> 删旧加新
-	// 这是一个常用的业务逻辑。
 	currentTags, _ := s.tagRepo.GetByDiaryID(ctx, id)
 	currentTagMap := make(map[uint]bool)
 	for _, t := range currentTags {
@@ -230,8 +280,8 @@ func (s *diaryService) ListByUserID(ctx context.Context, userID uint, page, page
 		return nil, 0, err
 	}
 
-	// 列表通常不需要解密全文，只返回 Summary
-	// 如果需要解密，可以在这里循环解密，但性能较差
+	s.decryptDiaries(diaries)
+
 	return diaries, total, nil
 }
 
@@ -243,7 +293,11 @@ func (s *diaryService) ListPublic(ctx context.Context, page, pageSize int) ([]do
 		pageSize = 20
 	}
 	offset := (page - 1) * pageSize
-	return s.diaryRepo.ListPublic(ctx, offset, pageSize)
+	diaries, total, err := s.diaryRepo.ListPublic(ctx, offset, pageSize)
+	if err == nil {
+		s.decryptDiaries(diaries)
+	}
+	return diaries, total, err
 }
 
 func (s *diaryService) Search(ctx context.Context, userID uint, keyword string, page, pageSize int) ([]domain.Diary, int64, error) {
@@ -254,7 +308,11 @@ func (s *diaryService) Search(ctx context.Context, userID uint, keyword string, 
 		pageSize = 20
 	}
 	offset := (page - 1) * pageSize
-	return s.diaryRepo.SearchByUserID(ctx, userID, keyword, offset, pageSize)
+	diaries, total, err := s.diaryRepo.SearchByUserID(ctx, userID, keyword, offset, pageSize)
+	if err == nil {
+		s.decryptDiaries(diaries)
+	}
+	return diaries, total, err
 }
 
 func (s *diaryService) GetByDateRange(ctx context.Context, userID uint, startDate, endDate time.Time) ([]domain.Diary, error) {
@@ -262,6 +320,8 @@ func (s *diaryService) GetByDateRange(ctx context.Context, userID uint, startDat
 	if err != nil {
 		return nil, err
 	}
+
+	s.decryptDiaries(diaries)
 
 	// Decrypt content for export
 	for i := range diaries {
@@ -280,6 +340,8 @@ func (s *diaryService) GetByIDs(ctx context.Context, userID uint, ids []uint) ([
 	if err != nil {
 		return nil, err
 	}
+
+	s.decryptDiaries(diaries)
 
 	// Decrypt content for export
 	for i := range diaries {
